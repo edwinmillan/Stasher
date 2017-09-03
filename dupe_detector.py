@@ -5,7 +5,7 @@ import argparse
 
 def get_args():
     parser = argparse.ArgumentParser(description='Duplicate checker')
-    parser.add_argument('path', help='Path to files')
+    parser.add_argument('path', default=os.getcwd(), help='Path to files, defaults to current directory')
     args = parser.parse_args()
     return args
 
