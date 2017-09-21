@@ -1,29 +1,71 @@
-from sqlalchemy import Column, Integer, String, create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
-# db_file = 'test.db'
-
-db_file = ':memory:'
-engine = create_engine(f'sqlite:///{db_file}', echo=False)
+import os
+import hashlib
+import argparse
+from tinydb import TinyDB, where
+from pprint import pprint
+from shutil import move
 
 
-class FileHash(Base):
-    __tablename__ = 'hashes'
+def get_args():
+    parser = argparse.ArgumentParser(description='Duplicate checker')
+    parser.add_argument('path', nargs='?', default=os.getcwd(), help='Path to files, defaults to current directory')
+    args = parser.parse_args()
+    return args
 
-    id = Column(Integer, primary_key=True)
-    hash = Column(String(130))
 
-Base.metadata.create_all(engine)
+def chunk_reader(file, chunk_size=1024):
+    """Generator that reads a file in chunks of bytes"""
+    while True:
+        datachunk = file.read(chunk_size)
+        if not datachunk:
+            return
+        yield datachunk
 
-db_session = sessionmaker(bind=engine)
-session = db_session()
 
-filehash = FileHash(hash='D62B8B4FC68ED9B0A7465B2D9BD76BF5649F068853A370CB90AF9126D3C713D6720704ED5C7AD90B502BD571E06A3F648850437D4365A62BDBAE61A6A952BA87')
-session.add(filehash)
+def gather_inventory(path):
+    database = []
+    duplicates = []
+    for dirpath, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            data = {'filename': filename}
+            # Create an empty hashlib hash for filling
+            sha_hash = hashlib.sha512()
+            # Create the full filepath
+            data['full_path'] = os.path.join(dirpath, filename)
+            # Load up the files into the chunk reader
+            with open(data['full_path'], 'rb') as file:
+                for datachunk in chunk_reader(file):
+                    sha_hash.update(datachunk)
+            # digest that juicy file,
+            data['hash'] = sha_hash.hexdigest()
 
-session.commit()
+            # Check if the current filehash exists in the database
+            duplicate_found = False
 
-# for hashentry in session.query(FileHash).filter(FileHash.hash.contains('D62B')):
-#     print(hashentry.hash)
+            for entry in database:
+                if data['hash'] == entry.get('hash'):
+                    duplicate_found = True
+
+            if duplicate_found:
+                # Report and Delete the data
+                print(f'Duplicate found: [{data["hash"][:7]}] {data["filename"]}')
+                print(f'\tMarking for Deletion: {data["full_path"]}')
+                duplicates.append(data)
+            else:
+                # Store the collected data in the database
+                database.append(data)
+    return database, duplicates
+
+
+def main():
+    # args = get_args()
+    # path = args.path.replace('\\', '\\\\')
+    
+    database, duplicates = gather_inventory(r'E:\Projects\Stasher\testfiles')
+
+    # pprint(database)
+    # pprint(duplicates)
+
+
+if __name__ == '__main__':
+    main()
