@@ -2,14 +2,13 @@ import os
 import hashlib
 import argparse
 from tinydb import TinyDB, Query
-from pprint import pprint
 from shutil import move
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Duplicate checker')
-    parser.add_argument('-s', '--source', default=os.getcwd(), help='Path to source dir, defaults to current directory')
-    parser.add_argument('-t', '--target', help='Path to target dir, defaults to source directory')
+    parser.add_argument('source', default=os.getcwd(), help='Path to source dir, defaults to current directory')
+    parser.add_argument('target', nargs='?', help='Path to target dir, defaults to source directory')
     parser.add_argument('-r', '--rebuild-inventory', action='store_true', help='Rebuilds inventory file')
 
     args = parser.parse_args()
@@ -75,16 +74,20 @@ def build_inventory(inventory_filepath, data):
 
 
 def stash(database, target_path, inventory_filepath):
-    for entry in database:
-        if entry['full_path'] == inventory_filepath:
-            print("Removing Inventory from Database")
-            database.pop(entry)
+    """Stores the database entries in the target path while checking hashes against the current inventory for
+    duplicates."""
+    print('Stashing!')
+    inventory_filename = os.path.split(inventory_filepath)[-1]
+
     with TinyDB(inventory_filepath) as db:
         duplicates = []
         for file_entry in database:
             entry = Query()
             match = db.search(entry['hash'] == file_entry['hash'])
-            if match:
+            if file_entry['filename'] == inventory_filename:
+                print("Ignoring Inventory file")
+                continue
+            elif match:
                 print(f'Duplicate found: [{file_entry["hash"][:7]}] {file_entry["filename"]}')
                 duplicates.append(file_entry)
             else:
@@ -102,10 +105,14 @@ def main():
     inventory_filename = 'inventory.json'
     inventory_filepath = os.path.join(target_path, inventory_filename)
 
+    if os.path.isfile(inventory_filepath) and args.rebuild_inventory:
+        print("Rebuilding", inventory_filename)
+        os.remove(inventory_filepath)
+
     if os.path.isfile(inventory_filepath):
-        print(inventory_filepath, 'exists! Using it.')
+        print('Using', inventory_filepath)
     else:
-        print(inventory_filepath, 'doesn\'t exist! Building', inventory_filename)
+        print('Building', inventory_filename)
         target_database, target_duplicates = gather_inventory(target_path)
         if target_duplicates:
             delete_duplicates(target_duplicates)
@@ -115,10 +122,13 @@ def main():
     if source_duplicates:
         delete_duplicates(source_duplicates)
 
-    stash(source_database, target_path, inventory_filepath)
+    # Don't perform move actions if the source and target are the same.
+    if source_path != target_path:
+        # Stash the data in the target, deduplicate and update inventory file.
+        stash(source_database, target_path, inventory_filepath)
 
-    print("Done")
-    # input("Done")
+    # print("Done")
+    input("Done")
 
 
 if __name__ == '__main__':
