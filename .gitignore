@@ -103,4 +103,6 @@ ENV/
 
 # Test files
 testfiles/
-stasher/test.db
+testfiles.7z
+test_source/
+test_target/
