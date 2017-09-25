@@ -92,8 +92,8 @@ def stash(database, target_path, inventory_filepath):
                 duplicates.append(file_entry)
             else:
                 # Move the file
-                print('Moving:', file_entry['full_path'], '\n\tTo:', target_path)
-                move(file_entry['full_path'], target_path)
+                print('Moving:', file_entry['full_path'], '\n\tTo:', os.path.join(target_path, file_entry["filename"]))
+                move(file_entry['full_path'], os.path.join(target_path, file_entry["filename"]))
                 db.insert(file_entry)
         delete_duplicates(duplicates)
 
